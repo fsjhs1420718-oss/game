@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>奇幻卡牌與寶箱探索 - 遊戲介紹平台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- 引入思源黑體 (Noto Sans TC) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        /* 全站統一更換為思源黑體 */
+        * {
+            font-family: "Noto Sans TC", "Source Han Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif !important;
+        }
+
+        body {
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            background: #fbf7f4;
+            color: #4a4a4a;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+        }
+
+        /* 3D Card Flip styles */
+        .perspective-1000 {
+            perspective: 1000px;
+        }
+
+        .card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1);
+            transform-style: preserve-3d;
+        }
+
+        .card.flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+
+        .card-front, .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 20px -5px rgba(230, 200, 200, 0.5);
+        }
+
+        .card-back {
+            background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+            border: 3px solid #7dd3fc;
+            transform: rotateY(0deg);
+            box-shadow: inset 0 0 15px rgba(224, 242, 254, 0.8);
+        }
+
+        .card-front {
+            transform: rotateY(180deg);
+        }
+
+        /* 馬卡龍色系 - Rarity Borders & Glow Effects */
+        .rarity-common {
+            border: 4px solid #ffffff;
+            box-shadow: 0 8px 20px rgba(180, 210, 240, 0.5);
+        }
+
+        .rarity-rare {
+            border: 4px solid #f472b6;
+            box-shadow: 0 0 20px rgba(244, 114, 182, 0.6);
+            animation: pulse-pink 2s infinite ease-in-out;
+        }
+
+        .rarity-legendary {
+            border: 4px solid #fbbf24;
+            box-shadow: 0 0 25px rgba(251, 191, 36, 0.8);
+            animation: pulse-gold 1.5s infinite ease-in-out;
+        }
+
+        @keyframes pulse-pink {
+            0%, 100% { box-shadow: 0 0 12px rgba(244, 114, 182, 0.5); }
+            50% { box-shadow: 0 0 22px rgba(244, 114, 182, 0.9); }
+        }
+
+        @keyframes pulse-gold {
+            0%, 100% { box-shadow: 0 0 15px rgba(251, 191, 36, 0.6); transform: scale(1); }
+            50% { box-shadow: 0 0 30px rgba(251, 191, 36, 1); transform: scale(1.02); }
+        }
+
+        /* Particles animation for Gacha & Matched */
+        .particle {
+            position: fixed;
+            pointer-events: none;
+            animation: pop 0.9s ease-out forwards;
+            border-radius: 50%;
+            z-index: 999;
+        }
+
+        @keyframes pop {
+            0% { transform: translate(0, 0) scale(1.2); opacity: 1; }
+            100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
+        }
+
+        /* Rays animation behind chest */
+        @keyframes rotateRays {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .sun-rays {
+            animation: rotateRays 12s linear infinite;
+            background: repeating-conic-gradient(
+                from 0deg,
+                rgba(253, 224, 71, 0.35) 0deg 15deg,
+                transparent 15deg 30deg
+            );
+        }
+
+        /* Chest Jump Animation */
+        @keyframes chestShake {
+            0% { transform: scale(1) rotate(0deg); }
+            20% { transform: scale(1.1) rotate(-8deg); }
+            40% { transform: scale(1.1) rotate(8deg); }
+            60% { transform: scale(1.15) rotate(-8deg); }
+            80% { transform: scale(1.15) rotate(8deg); }
+            100% { transform: scale(1.2) rotate(0deg); }
+        }
+
+        .chest-shaking {
+            animation: chestShake 0.8s ease-in-out forwards;
+        }
+
+        /* Notice Popup Animation */
+        @keyframes floatUpFade {
+            0% { opacity: 0; transform: translate(-50%, 20px) scale(0.8); }
+            20% { opacity: 1; transform: translate(-50%, 0) scale(1.05); }
+            80% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -20px) scale(0.9); }
+        }
+
+        .notice-toast {
+            animation: floatUpFade 1.8s ease-in-out forwards;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between relative bg-[#fbf7f4]">
+
+    <!-- Top Site Navigation Header (馬卡龍奶油粉藍風格) -->
+    <nav class="w-full px-6 py-4 bg-white/90 border-b border-rose-100 backdrop-blur-md sticky top-0 z-50 flex items-center justify-between shadow-sm">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-amber-300 rounded-xl flex items-center justify-center text-slate-800 text-xl font-bold shadow-md">
+                🎴
+            </div>
+            <span class="text-2xl font-bold text-rose-500 tracking-wider">
+                奇幻故事卡牌平台
+            </span>
+        </div>
+
+        <div class="hidden md:flex items-center gap-6 text-slate-600 text-lg font-bold">
+            <a href="#hero" class="hover:text-rose-500 transition">🚀 簡介</a>
+            <a href="#play-section" class="hover:text-rose-500 transition">🎮 預覽遊戲</a>
+            <a href="#features-section" class="hover:text-rose-500 transition">✨ 遊戲特色</a>
+            <a href="#history-section" class="hover:text-rose-500 transition">📜 開發歷程</a>
+            <a href="#egg-section" class="hover:text-rose-500 transition">🔍 秘密特區</a>
+        </div>
+
+        <a href="#play-section" class="px-6 py-2.5 bg-rose-400 text-white font-bold text-lg rounded-xl shadow-md hover:bg-rose-500 transition transform active:scale-95">
+            🎮 立即遊玩
+        </a>
+    </nav>
+
+    <!-- SECTION 1: HERO BANNER (馬卡龍粉黃暖色) -->
+    <section id="hero" class="w-full py-16 px-4 bg-gradient-to-b from-pink-50 via-amber-50 to-[#fbf7f4] text-center relative overflow-hidden">
+        <div class="max-w-4xl mx-auto relative z-10">
+            <span class="px-5 py-2 rounded-full bg-rose-100 border border-rose-200 text-rose-600 text-base font-bold inline-block mb-4 shadow-sm">
+                ✨ 完全以圖代文 · 免閱讀無障礙卡牌遊戲
+            </span>
+            <h1 class="text-4xl sm:text-6xl font-bold mb-6 text-slate-800 tracking-wide">
+                翻開故事，解鎖 <span class="text-rose-500">傳說寶箱</span>
+            </h1>
+            <p class="text-xl text-slate-600 mb-8 max-w-2xl mx-auto leading-relaxed">
+                專為視覺體驗打造！結合記憶翻牌、寶箱抽獎與豐富集卡冊，呈現希臘神話、魔法、龍族與太空等 20+ 種精美故事卡牌。
+            </p>
+            <div class="flex justify-center gap-4">
+                <a href="#play-section" class="px-8 py-4 bg-amber-400 hover:bg-amber-500 text-slate-900 font-bold text-2xl rounded-2xl shadow-lg transition transform hover:-translate-y-0.5 active:scale-95">
+                    🎮 開始預覽體驗
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 2: GAMEPLAY EMBEDDED PLATFORM (馬卡龍亮色卡片) -->
+    <section id="play-section" class="w-full py-8 px-2 sm:px-4 max-w-6xl mx-auto">
+        <div class="bg-white border-4 border-amber-200 rounded-3xl shadow-xl p-2 sm:p-6 overflow-hidden relative">
+            <div class="flex items-center justify-between pb-4 mb-4 border-b border-rose-100 px-2">
+                <div class="flex items-center gap-2">
+                    <span class="w-3.5 h-3.5 rounded-full bg-rose-400"></span>
+                    <span class="w-3.5 h-3.5 rounded-full bg-amber-400"></span>
+                    <span class="w-3.5 h-3.5 rounded-full bg-emerald-400"></span>
+                    <span class="text-slate-500 text-base font-bold ml-2">Game Canvas Mode</span>
+                </div>
+                <span class="text-rose-500 text-base font-bold flex items-center gap-1">
+                    ⚡ 可直接在此處試玩遊戲
+                </span>
+            </div>
+
+            <!-- GAME TOP INTERACTION BAR -->
+            <header class="w-full px-4 py-3 bg-sky-50 border border-sky-100 rounded-2xl flex items-center justify-between shadow-sm mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 bg-amber-300 rounded-2xl flex items-center justify-center text-slate-800 text-2xl shadow-sm">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    </div>
+                    <!-- Keys Count Counter -->
+                    <div id="key-badge-box" class="flex items-center gap-2 bg-white border border-amber-200 px-4 py-2 rounded-2xl shadow-sm">
+                        <span class="text-2xl">🗝️</span>
+                        <span id="key-count" class="text-2xl font-bold text-amber-600">0</span>
+                    </div>
+                </div>
+
+                <!-- Mode Switcher Buttons -->
+                <div class="flex items-center gap-2 sm:gap-3">
+                    <!-- Play Flip Game Tab -->
+                    <button id="tab-game" class="w-12 h-12 sm:w-14 sm:h-14 bg-amber-400 text-slate-900 rounded-2xl flex items-center justify-center text-2xl shadow-md transition active:scale-95 border-b-4 border-amber-500 relative">
+                        🧩
+                    </button>
+                    <!-- Chest Gacha Tab -->
+                    <button id="tab-chest" class="w-12 h-12 sm:w-14 sm:h-14 bg-white text-slate-700 rounded-2xl flex items-center justify-center text-2xl shadow-sm transition active:scale-95 border-b-4 border-slate-200 relative">
+                        🎁
+                        <span id="chest-badge" class="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 text-white rounded-full text-xs font-bold flex items-center justify-center hidden animate-bounce">!</span>
+                    </button>
+                    <!-- Card Album Gallery Tab -->
+                    <button id="tab-album" class="w-12 h-12 sm:w-14 sm:h-14 bg-white text-slate-700 rounded-2xl flex items-center justify-center text-2xl shadow-sm transition active:scale-95 border-b-4 border-slate-200">
+                        🖼
+                    </button>
+                    <!-- Peek Action Button -->
+                    <button id="btn-peek" class="w-12 h-12 sm:w-14 sm:h-14 bg-purple-400 hover:bg-purple-500 text-white rounded-2xl flex items-center justify-center text-2xl shadow-md transition active:scale-95 border-b-4 border-purple-600">
+                        👁️
+                    </button>
+                    <!-- Refresh Game Button -->
+                    <button id="btn-restart" class="w-12 h-12 sm:w-14 sm:h-14 bg-sky-400 hover:bg-sky-500 text-white rounded-2xl flex items-center justify-center text-2xl shadow-md transition active:scale-95 border-b-4 border-sky-600">
+                        🔄
+                    </button>
+                </div>
+            </header>
+
+            <main class="w-full min-h-[480px] py-4 flex flex-col items-center justify-center relative">
+
+                <!-- VIEW 1: FLIP MATCH MEMORY GAME -->
+                <section id="view-game" class="w-full flex flex-col items-center">
+                    <div id="game-grid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3 sm:gap-4 max-w-5xl w-full">
+                        <!-- Cards render dynamically via JavaScript -->
+                    </div>
+                </section>
+
+                <!-- VIEW 2: CHEST UNLOCK / GACHA ROOM -->
+                <section id="view-chest" class="w-full max-w-md hidden flex-col items-center justify-center py-8 relative">
+                    <div class="relative w-72 h-72 flex items-center justify-center my-4">
+                        <div class="sun-rays absolute inset-0 rounded-full scale-125 opacity-80 pointer-events-none"></div>
+                        <div class="absolute inset-0 bg-amber-200/50 rounded-full blur-2xl pointer-events-none animate-pulse"></div>
+                        <button id="btn-open-chest" class="relative z-10 text-9xl transform hover:scale-110 active:scale-95 transition cursor-pointer filter drop-shadow-lg">
+                            🎁
+                        </button>
+                    </div>
+                    
+                    <button id="btn-unlock-action" class="mt-6 px-8 py-4 bg-gradient-to-r from-amber-400 to-rose-400 hover:from-amber-300 hover:to-rose-300 text-slate-900 font-bold text-3xl rounded-3xl shadow-lg flex items-center gap-4 border-b-4 border-rose-500 transition transform active:scale-95">
+                        <span>🗝️</span>
+                        <span id="unlock-cost-display" class="text-2xl">x1</span>
+                        <span>✨</span>
+                    </button>
+                </section>
+
+                <!-- VIEW 3: CARD COLLECTION ALBUM GALLERY -->
+                <section id="view-album" class="w-full max-w-5xl hidden flex-col items-center">
+                    <div class="mb-6 bg-pink-50 border border-pink-200 px-6 py-3 rounded-2xl flex items-center gap-4 shadow-sm">
+                        <span class="text-3xl">🖼️</span>
+                        <div class="flex items-center gap-2 text-2xl font-bold">
+                            <span id="album-count" class="text-rose-500">0</span>
+                            <span class="text-slate-400">/</span>
+                            <span id="album-total" class="text-slate-600">24</span>
+                        </div>
+                        <span id="album-trophy" class="text-3xl opacity-30">🏆</span>
+                    </div>
+
+                    <div id="album-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 w-full">
+                        <!-- Album items render dynamically -->
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </section>
+
+    <!-- SECTION 3: FEATURES HIGHLIGHT -->
+    <section id="features-section" class="w-full py-16 px-4 max-w-6xl mx-auto">
+        <h2 class="text-3xl font-bold text-center mb-12 text-slate-800 tracking-wide">✨ 遊戲特色與視覺設計</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div class="bg-white border-2 border-pink-100 p-6 rounded-2xl text-center shadow-md">
+                <div class="text-5xl mb-4">🚫✍️</div>
+                <h3 class="text-2xl font-bold mb-2 text-slate-800">完全以圖代文</h3>
+                <p class="text-slate-600 text-base leading-relaxed">完全不需看字！採用豐富 Emoji 與 Icon 符號進行直覺操作與繪本說故事。</p>
+            </div>
+            <div class="bg-white border-2 border-purple-100 p-6 rounded-2xl text-center shadow-md">
+                <div class="text-5xl mb-4">👑✨</div>
+                <h3 class="text-2xl font-bold mb-2 text-slate-800">三級卡牌稀有度</h3>
+                <p class="text-slate-600 text-base leading-relaxed">分為普通、稀有與金色傳說等級，並附帶強烈的脈衝光芒與耀眼粒子特效。</p>
+            </div>
+            <div class="bg-white border-2 border-amber-100 p-6 rounded-2xl text-center shadow-md">
+                <div class="text-5xl mb-4">🎁🗝️</div>
+                <h3 class="text-2xl font-bold mb-2 text-slate-800">寶箱盲盒與躍轉</h3>
+                <p class="text-slate-600 text-base leading-relaxed">翻牌成功即賺取鑰匙，耗盡鑰匙時自動貼心引導跳轉回記憶配對關卡。</p>
+            </div>
+            <div class="bg-white border-2 border-sky-100 p-6 rounded-2xl text-center shadow-md">
+                <div class="text-5xl mb-4">🖼️🏆</div>
+                <h3 class="text-2xl font-bold mb-2 text-slate-800">集卡冊圖鑑展覽</h3>
+                <p class="text-slate-600 text-base leading-relaxed">解鎖的故事卡牌自動收錄進集卡相簿中，讓收集與累積成就感滿分。</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 4: DEVELOPMENT HISTORY TIMELINE -->
+    <section id="history-section" class="w-full py-16 px-4 bg-amber-50/60 border-y border-amber-100">
+        <div class="max-w-4xl mx-auto">
+            <h2 class="text-3xl font-bold text-center mb-12 text-slate-800 tracking-wide">📜 開發歷程與設計迭代</h2>
+            
+            <div class="space-y-8 relative before:absolute before:inset-0 before:left-4 sm:before:left-1/2 before:w-0.5 before:bg-rose-300">
+                <!-- Timeline Item 1 -->
+                <div class="relative flex flex-col sm:flex-row items-start sm:items-center group">
+                    <div class="flex items-center justify-center w-8 h-8 rounded-full bg-rose-400 text-white font-bold z-10 shrink-0 sm:order-1 sm:group-even:order-1 shadow-md">1</div>
+                    <div class="bg-white border border-rose-100 p-6 rounded-2xl shadow-md ml-10 sm:ml-0 sm:w-1/2 sm:px-6 sm:group-odd:pr-12 sm:group-even:pl-12 sm:group-odd:text-right">
+                        <span class="text-sm text-rose-500 font-bold uppercase">Phase 1</span>
+                        <h4 class="text-xl font-bold text-slate-800 mt-1">無字卡牌構想與繪圖核心</h4>
+                        <p class="text-slate-600 text-base mt-2 leading-relaxed">確立「免閱讀」的無障礙視覺設計，彙整古希臘、魔法、童話、龍族與太空等 20+ 種豐富圖示故事。</p>
+                    </div>
+                </div>
+
+                <!-- Timeline Item 2 -->
+                <div class="relative flex flex-col sm:flex-row items-start sm:items-center group">
+                    <div class="flex items-center justify-center w-8 h-8 rounded-full bg-rose-400 text-white font-bold z-10 shrink-0 sm:order-1 sm:group-even:order-1 shadow-md">2</div>
+                    <div class="bg-white border border-rose-100 p-6 rounded-2xl shadow-md ml-10 sm:ml-0 sm:w-1/2 sm:px-6 sm:group-odd:pr-12 sm:group-even:pl-12 sm:group-even:ml-auto">
+                        <span class="text-sm text-rose-500 font-bold uppercase">Phase 2</span>
+                        <h4 class="text-xl font-bold text-slate-800 mt-1">雙重互動：配對關卡與寶箱抽卡</h4>
+                        <p class="text-slate-600 text-base mt-2 leading-relaxed">結合記憶翻牌配對（獲得鑰匙）與開寶箱抽隨機卡牌的樂趣，搭配三階稀有度閃光視覺。</p>
+                    </div>
+                </div>
+
+                <!-- Timeline Item 3 -->
+                <div class="relative flex flex-col sm:flex-row items-start sm:items-center group">
+                    <div class="flex items-center justify-center w-8 h-8 rounded-full bg-rose-400 text-white font-bold z-10 shrink-0 sm:order-1 sm:group-even:order-1 shadow-md">3</div>
+                    <div class="bg-white border border-rose-100 p-6 rounded-2xl shadow-md ml-10 sm:ml-0 sm:w-1/2 sm:px-6 sm:group-odd:pr-12 sm:group-even:pl-12 sm:group-odd:text-right">
+                        <span class="text-sm text-rose-500 font-bold uppercase">Phase 3</span>
+                        <h4 class="text-xl font-bold text-slate-800 mt-1">集卡冊相簿與隱藏驚喜</h4>
+                        <p class="text-slate-600 text-base mt-2 leading-relaxed">開發全卡牌解鎖圖鑑相簿，並加入無鑰匙時的自動跳轉機制與隱藏鍵盤快捷破關彩蛋。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 5: SECRET HINT SECTION (馬卡龍奶油邊框) -->
+    <section id="egg-section" class="w-full py-16 px-4 max-w-4xl mx-auto text-center">
+        <div class="bg-white border-2 border-dashed border-rose-300 rounded-3xl p-8 shadow-md">
+            <div class="text-6xl mb-4 animate-bounce">🔍✨</div>
+            <h3 class="text-2xl font-bold text-rose-500 mb-3">神秘特區：隱藏要素提示</h3>
+            <p class="text-slate-700 text-xl leading-relaxed max-w-xl mx-auto">
+                在試玩遊戲時，試著在鍵盤上依次按下<span class="text-rose-500 font-bold underline px-1">神秘的兩位數數字組合</span>……全盤卡牌將瞬間解鎖破關，並釋放滿屏金色傳說粒子與彩蛋獎勵！
+            </p>
+        </div>
+    </section>
+
+    <!-- Visual Toast Notice (Zero Keys Auto Jump Prompt) -->
+    <div id="notice-toast" class="fixed top-24 left-1/2 -translate-x-1/2 z-50 pointer-events-none hidden bg-white border-2 border-rose-400 text-slate-800 px-6 py-3 rounded-2xl shadow-xl flex items-center gap-4 text-3xl notice-toast">
+        <span class="animate-bounce">🗝️❌</span>
+        <span>➡️</span>
+        <span class="animate-pulse">🧩</span>
+    </div>
+
+    <!-- GACHA CARD REVEAL MODAL -->
+    <div id="modal-reveal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 hidden opacity-0 transition-opacity duration-300">
+        <div class="relative flex flex-col items-center">
+            <div id="reveal-card-box" class="w-64 h-88 rounded-3xl p-6 flex flex-col items-center justify-center text-center shadow-2xl transition transform scale-75 duration-500 relative">
+                <div id="reveal-rarity-badge" class="absolute top-4 right-4 text-3xl">⭐</div>
+                <div id="reveal-emoji" class="text-7xl mb-4 filter drop-shadow-md">✨</div>
+                <i id="reveal-icon" class="fa-solid fa-star text-4xl text-slate-800/80"></i>
+            </div>
+            <button id="btn-reveal-close" class="mt-8 px-10 py-4 bg-emerald-400 text-slate-900 text-3xl font-bold rounded-2xl shadow-lg hover:bg-emerald-300 border-b-4 border-emerald-600 active:scale-95 transition">
+                👍
+            </button>
+        </div>
+    </div>
+
+    <!-- VICTORY CELEBRATION MODAL -->
+    <div id="modal-win" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white border-4 border-amber-300 rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl flex flex-col items-center">
+            <div class="text-8xl mb-2 animate-bounce">🏆</div>
+            <div class="flex gap-2 text-4xl text-amber-400 my-4">
+                <span>⭐</span><span>⭐</span><span>⭐</span>
+            </div>
+            <div class="bg-amber-100 text-amber-700 px-6 py-3 rounded-2xl text-2xl font-bold mb-6 flex items-center gap-3">
+                <span>🗝️</span>
+                <span>+3</span>
+            </div>
+            <button id="btn-win-continue" class="w-full py-4 bg-rose-400 hover:bg-rose-500 text-white font-bold text-3xl rounded-2xl shadow-md border-b-4 border-rose-600 active:scale-95 transition">
+                🔄
+            </button>
+        </div>
+    </div>
+
+    <!-- Footer Symbols -->
+    <footer class="w-full p-6 bg-white border-t border-rose-100 flex flex-col items-center gap-4">
+        <div class="flex gap-4 sm:gap-6 bg-pink-50 px-6 py-2 rounded-full border border-pink-100 shadow-inner overflow-x-auto text-2xl">
+            <span title="希臘">🏛️</span>
+            <span title="童話">🏰</span>
+            <span title="魔法">🧙‍♂️</span>
+            <span title="龍族">🐲</span>
+            <span title="獨角獸">🦄</span>
+            <span title="海盜">🏴‍☠️</span>
+            <span title="太空">🚀</span>
+            <span title="人魚">🧜‍♀️</span>
+            <span title="恐龍">🦖</span>
+            <span title="賽博">🤖</span>
+            <span title="忍者">🥷</span>
+            <span title="外星人">🛸</span>
+            <span title="英雄">🦸</span>
+        </div>
+        <p class="text-slate-500 text-base font-bold">© 2026 奇幻卡牌與寶箱探索平台 - 一頁式遊戲作品展覽網頁</p>
+    </footer>
+
+    <script>
+        const CARDS_DATABASE = [
+            { id: 'greece', emoji: '🏛️', icon: 'fa-landmark-dome', bg: 'from-amber-200 to-yellow-100', rarity: 'common' },
+            { id: 'fairytale', emoji: '🏰', icon: 'fa-castle', bg: 'from-emerald-200 to-teal-100', rarity: 'common' },
+            { id: 'magic', emoji: '🧙‍♂️', icon: 'fa-wand-magic-sparkles', bg: 'from-purple-200 to-pink-200', rarity: 'rare' },
+            { id: 'dragon', emoji: '🐲', icon: 'fa-dragon', bg: 'from-rose-300 to-amber-200', rarity: 'legendary' },
+            { id: 'space', emoji: '🚀', icon: 'fa-rocket', bg: 'from-sky-200 to-blue-200', rarity: 'common' },
+            { id: 'pirate', emoji: '🏴‍☠️', icon: 'fa-skull-crossbones', bg: 'from-slate-200 to-stone-300', rarity: 'common' },
+            { id: 'arena', emoji: '⚔️', icon: 'fa-shield-halved', bg: 'from-orange-200 to-amber-200', rarity: 'common' },
+            { id: 'cyber', emoji: '🤖', icon: 'fa-robot', bg: 'from-fuchsia-200 to-cyan-200', rarity: 'rare' },
+            { id: 'mermaid', emoji: '🧜‍♀️', icon: 'fa-fish-fins', bg: 'from-cyan-200 to-teal-200', rarity: 'rare' },
+            { id: 'time', emoji: '⏳', icon: 'fa-hourglass-half', bg: 'from-amber-200 to-orange-100', rarity: 'common' },
+            { id: 'unicorn', emoji: '🦄', icon: 'fa-horse-head', bg: 'from-pink-200 to-purple-200', rarity: 'legendary' },
+            { id: 'ghost', emoji: '👻', icon: 'fa-ghost', bg: 'from-purple-200 to-slate-200', rarity: 'common' },
+            { id: 'cowboy', emoji: '🤠', icon: 'fa-hat-cowboy', bg: 'from-amber-200 to-orange-200', rarity: 'common' },
+            { id: 'ninja', emoji: '🥷', icon: 'fa-user-ninja', bg: 'from-slate-300 to-stone-400', rarity: 'rare' },
+            { id: 'steampunk', emoji: '⚙️', icon: 'fa-gear', bg: 'from-orange-200 to-amber-100', rarity: 'common' },
+            { id: 'egypt', emoji: '👁️', icon: 'fa-eye', bg: 'from-yellow-200 to-amber-200', rarity: 'rare' },
+            { id: 'candy', emoji: '🍭', icon: 'fa-candy-cane', bg: 'from-pink-200 to-rose-200', rarity: 'common' },
+            { id: 'jungle', emoji: '🌴', icon: 'fa-tree', bg: 'from-green-200 to-emerald-200', rarity: 'common' },
+            { id: 'dino', emoji: '🦖', icon: 'fa-paw', bg: 'from-lime-200 to-green-300', rarity: 'rare' },
+            { id: 'alien', emoji: '🛸', icon: 'fa-user-astronaut', bg: 'from-violet-200 to-indigo-200', rarity: 'common' },
+            { id: 'ice', emoji: '❄️', icon: 'fa-snowflake', bg: 'from-sky-100 to-cyan-200', rarity: 'common' },
+            { id: 'hero', emoji: '🦸', icon: 'fa-mask', bg: 'from-rose-200 to-pink-200', rarity: 'common' },
+            { id: 'phoenix', emoji: '🔥', icon: 'fa-fire', bg: 'from-amber-300 to-rose-300', rarity: 'legendary' },
+            { id: 'volcano', emoji: '🌋', icon: 'fa-mountain-sun', bg: 'from-orange-300 to-red-200', rarity: 'rare' }
+        ];
+
+        let keysCount = 3;
+        let unlockedCardIds = new Set(['greece', 'fairytale']);
+        let activeTab = 'game';
+        
+        let currentGameCards = [];
+        let flippedCards = [];
+        let matchedPairs = 0;
+        let totalPairs = 8;
+        let isLock = false;
+
+        const keyCountEl = document.getElementById('key-count');
+        const chestBadgeEl = document.getElementById('chest-badge');
+        const viewGame = document.getElementById('view-game');
+        const viewChest = document.getElementById('view-chest');
+        const viewAlbum = document.getElementById('view-album');
+        
+        const tabGame = document.getElementById('tab-game');
+        const tabChest = document.getElementById('tab-chest');
+        const tabAlbum = document.getElementById('tab-album');
+
+        const gameGrid = document.getElementById('game-grid');
+        const albumGrid = document.getElementById('album-grid');
+        const albumCountEl = document.getElementById('album-count');
+        const albumTotalEl = document.getElementById('album-total');
+        const albumTrophyEl = document.getElementById('album-trophy');
+
+        const modalReveal = document.getElementById('modal-reveal');
+        const modalWin = document.getElementById('modal-win');
+        const btnOpenChest = document.getElementById('btn-open-chest');
+        const btnUnlockAction = document.getElementById('btn-unlock-action');
+        const noticeToast = document.getElementById('notice-toast');
+
+        function updateUI() {
+            keyCountEl.textContent = keysCount;
+            albumCountEl.textContent = unlockedCardIds.size;
+            albumTotalEl.textContent = CARDS_DATABASE.length;
+
+            if (unlockedCardIds.size === CARDS_DATABASE.length) {
+                albumTrophyEl.classList.remove('opacity-30');
+                albumTrophyEl.classList.add('text-amber-500', 'animate-bounce');
+            }
+
+            if (keysCount > 0) {
+                chestBadgeEl.classList.remove('hidden');
+            } else {
+                chestBadgeEl.classList.add('hidden');
+            }
+        }
+
+        function switchTab(tab) {
+            activeTab = tab;
+            viewGame.classList.add('hidden');
+            viewChest.classList.add('hidden');
+            viewAlbum.classList.add('hidden');
+
+            tabGame.className = "w-12 h-12 sm:w-14 sm:h-14 bg-white text-slate-700 rounded-2xl flex items-center justify-center text-2xl shadow-sm transition active:scale-95 border-b-4 border-slate-200 relative";
+            tabChest.className = "w-12 h-12 sm:w-14 sm:h-14 bg-white text-slate-700 rounded-2xl flex items-center justify-center text-2xl shadow-sm transition active:scale-95 border-b-4 border-slate-200 relative";
+            tabAlbum.className = "w-12 h-12 sm:w-14 sm:h-14 bg-white text-slate-700 rounded-2xl flex items-center justify-center text-2xl shadow-sm transition active:scale-95 border-b-4 border-slate-200";
+
+            if (tab === 'game') {
+                viewGame.classList.remove('hidden');
+                tabGame.className = "w-12 h-12 sm:w-14 sm:h-14 bg-amber-400 text-slate-900 rounded-2xl flex items-center justify-center text-2xl shadow-md transition active:scale-95 border-b-4 border-amber-500 relative";
+            } else if (tab === 'chest') {
+                viewChest.classList.remove('hidden');
+                viewChest.classList.add('flex');
+                tabChest.className = "w-12 h-12 sm:w-14 sm:h-14 bg-amber-400 text-slate-900 rounded-2xl flex items-center justify-center text-2xl shadow-md transition active:scale-95 border-b-4 border-amber-500 relative";
+            } else if (tab === 'album') {
+                viewAlbum.classList.remove('hidden');
+                viewAlbum.classList.add('flex');
+                tabAlbum.className = "w-12 h-12 sm:w-14 sm:h-14 bg-amber-400 text-slate-900 rounded-2xl flex items-center justify-center text-2xl shadow-md transition active:scale-95 border-b-4 border-amber-500";
+                renderAlbum();
+            }
+        }
+
+        // Show visual toast notice & jump to memory game automatically
+        function triggerNoKeyAutoJump() {
+            noticeToast.classList.remove('hidden');
+            setTimeout(() => {
+                noticeToast.classList.add('hidden');
+                switchTab('game');
+                // Highlight game tab briefly
+                tabGame.classList.add('scale-125');
+                setTimeout(() => tabGame.classList.remove('scale-125'), 500);
+            }, 1200);
+        }
+
+        function initGame() {
+            gameGrid.innerHTML = '';
+            flippedCards = [];
+            matchedPairs = 0;
+            isLock = false;
+
+            totalPairs = window.innerWidth > 640 ? 12 : 8;
+            
+            const shuffledPool = [...CARDS_DATABASE].sort(() => Math.random() - 0.5);
+            const selectedCards = shuffledPool.slice(0, totalPairs);
+            
+            currentGameCards = [...selectedCards, ...selectedCards].sort(() => Math.random() - 0.5);
+
+            currentGameCards.forEach((card, index) => {
+                const cardEl = document.createElement('div');
+                cardEl.className = 'card h-32 sm:h-36 md:h-40 perspective-1000 cursor-pointer';
+                cardEl.dataset.index = index;
+                cardEl.dataset.id = card.id;
+
+                let borderClass = 'rarity-common';
+                if (card.rarity === 'rare') borderClass = 'rarity-rare';
+                if (card.rarity === 'legendary') borderClass = 'rarity-legendary';
+
+                cardEl.innerHTML = `
+                    <div class="card-inner">
+                        <div class="card-back text-4xl text-sky-400">
+                            <i class="fa-solid fa-gem opacity-80"></i>
+                        </div>
+                        <div class="card-front bg-gradient-to-br ${card.bg} ${borderClass}">
+                            <span class="text-4xl sm:text-5xl mb-1 filter drop-shadow">${card.emoji}</span>
+                            <i class="fa-solid ${card.icon} text-2xl text-slate-700/80"></i>
+                        </div>
+                    </div>
+                `;
+
+                cardEl.addEventListener('click', () => handleCardClick(cardEl, card));
+                gameGrid.appendChild(cardEl);
+            });
+        }
+
+        function handleCardClick(cardEl, cardData) {
+            if (isLock) return;
+            if (cardEl.classList.contains('flipped') || cardEl.classList.contains('matched')) return;
+
+            cardEl.classList.add('flipped');
+            flippedCards.push({ node: cardEl, data: cardData });
+
+            if (flippedCards.length === 2) {
+                checkMatch();
+            }
+        }
+
+        function checkMatch() {
+            isLock = true;
+            const [c1, c2] = flippedCards;
+
+            if (c1.data.id === c2.data.id) {
+                setTimeout(() => {
+                    c1.node.classList.add('matched');
+                    c2.node.classList.add('matched');
+
+                    createParticles(c1.node, c1.data.rarity);
+                    createParticles(c2.node, c2.data.rarity);
+
+                    matchedPairs++;
+                    flippedCards = [];
+                    isLock = false;
+
+                    if (matchedPairs === totalPairs) {
+                        setTimeout(showWinModal, 600);
+                    }
+                }, 400);
+            } else {
+                setTimeout(() => {
+                    c1.node.classList.remove('flipped');
+                    c2.node.classList.remove('flipped');
+                    flippedCards = [];
+                    isLock = false;
+                }, 1000);
+            }
+        }
+
+        function createParticles(element, rarity = 'common') {
+            const rect = element.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+
+            const count = rarity === 'legendary' ? 24 : (rarity === 'rare' ? 16 : 10);
+            const colors = rarity === 'legendary' ? ['#f59e0b', '#fbbf24', '#f472b6'] : (rarity === 'rare' ? ['#c084fc', '#f472b6', '#38bdf8'] : ['#a7f3d0', '#bae6fd']);
+
+            for (let i = 0; i < count; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                const color = colors[Math.floor(Math.random() * colors.length)];
+
+                const angle = (Math.PI * 2 / count) * i;
+                const dist = 60 + Math.random() * 50;
+                const dx = `${Math.cos(angle) * dist}px`;
+                const dy = `${Math.sin(angle) * dist}px`;
+
+                p.style.backgroundColor = color;
+                p.style.width = '12px';
+                p.style.height = '12px';
+                p.style.left = `${centerX}px`;
+                p.style.top = `${centerY}px`;
+                p.style.setProperty('--dx', dx);
+                p.style.setProperty('--dy', dy);
+
+                document.body.appendChild(p);
+                setTimeout(() => p.remove(), 900);
+            }
+        }
+
+        function peekCards() {
+            if (isLock) return;
+            isLock = true;
+            const unflipCards = document.querySelectorAll('.card:not(.matched)');
+            unflipCards.forEach(c => c.classList.add('flipped'));
+
+            setTimeout(() => {
+                unflipCards.forEach(c => c.classList.remove('flipped'));
+                isLock = false;
+            }, 1800);
+        }
+
+        function showWinModal() {
+            keysCount += 3;
+            updateUI();
+            modalWin.classList.remove('hidden');
+            setTimeout(() => modalWin.classList.remove('opacity-0'), 50);
+            createParticles(modalWin.querySelector('.text-8xl'), 'legendary');
+        }
+
+        function triggerGacha() {
+            // Check keys condition
+            if (keysCount < 1) {
+                triggerNoKeyAutoJump();
+                return;
+            }
+
+            keysCount -= 1;
+            updateUI();
+
+            btnOpenChest.classList.add('chest-shaking');
+
+            setTimeout(() => {
+                btnOpenChest.classList.remove('chest-shaking');
+
+                const rand = Math.random();
+                let targetRarity = 'common';
+                if (rand > 0.6 && rand <= 0.9) targetRarity = 'rare';
+                if (rand > 0.9) targetRarity = 'legendary';
+
+                const matchingPool = CARDS_DATABASE.filter(c => c.rarity === targetRarity);
+                const drawnCard = matchingPool[Math.floor(Math.random() * matchingPool.length)];
+
+                unlockedCardIds.add(drawnCard.id);
+                updateUI();
+
+                openRevealModal(drawnCard);
+            }, 800);
+        }
+
+        function openRevealModal(card) {
+            const cardBox = document.getElementById('reveal-card-box');
+            const emojiEl = document.getElementById('reveal-emoji');
+            const iconEl = document.getElementById('reveal-icon');
+            const badgeEl = document.getElementById('reveal-rarity-badge');
+
+            cardBox.className = `w-64 h-88 rounded-3xl p-6 flex flex-col items-center justify-center text-center shadow-xl transition transform scale-75 duration-500 relative bg-gradient-to-br ${card.bg}`;
+            
+            if (card.rarity === 'common') {
+                cardBox.classList.add('rarity-common');
+                badgeEl.textContent = '⚪';
+            } else if (card.rarity === 'rare') {
+                cardBox.classList.add('rarity-rare');
+                badgeEl.textContent = '🟣';
+            } else {
+                cardBox.classList.add('rarity-legendary');
+                badgeEl.textContent = '👑';
+            }
+
+            emojiEl.textContent = card.emoji;
+            iconEl.className = `fa-solid ${card.icon} text-5xl text-slate-800/80`;
+
+            modalReveal.classList.remove('hidden');
+            setTimeout(() => {
+                modalReveal.classList.remove('opacity-0');
+                cardBox.classList.remove('scale-75');
+                cardBox.classList.add('scale-100');
+                createParticles(cardBox, card.rarity);
+            }, 50);
+        }
+
+        function renderAlbum() {
+            albumGrid.innerHTML = '';
+
+            CARDS_DATABASE.forEach(card => {
+                const isUnlocked = unlockedCardIds.has(card.id);
+                const albumCard = document.createElement('div');
+                
+                let borderClass = 'rarity-common';
+                if (card.rarity === 'rare') borderClass = 'rarity-rare';
+                if (card.rarity === 'legendary') borderClass = 'rarity-legendary';
+
+                albumCard.className = `h-36 sm:h-40 rounded-2xl flex flex-col items-center justify-center relative p-3 transition transform hover:scale-105 shadow-md ${
+                    isUnlocked 
+                        ? `bg-gradient-to-br ${card.bg} ${borderClass}` 
+                        : 'bg-slate-100 border-2 border-slate-200 opacity-40 grayscale'
+                }`;
+
+                albumCard.innerHTML = `
+                    <div class="absolute top-2 right-2 text-sm">
+                        ${isUnlocked ? (card.rarity === 'legendary' ? '👑' : card.rarity === 'rare' ? '🟣' : '⚪') : '🔒'}
+                    </div>
+                    <span class="text-4xl sm:text-5xl mb-2 filter drop-shadow">${isUnlocked ? card.emoji : '❓'}</span>
+                    ${isUnlocked ? `<i class="fa-solid ${card.icon} text-xl text-slate-700/80"></i>` : ''}
+                `;
+
+                albumGrid.appendChild(albumCard);
+            });
+        }
+
+        // Event Listeners Setup
+        tabGame.addEventListener('click', () => switchTab('game'));
+        tabChest.addEventListener('click', () => switchTab('chest'));
+        tabAlbum.addEventListener('click', () => switchTab('album'));
+
+        document.getElementById('btn-peek').addEventListener('click', peekCards);
+        document.getElementById('btn-restart').addEventListener('click', initGame);
+
+        btnUnlockAction.addEventListener('click', triggerGacha);
+        btnOpenChest.addEventListener('click', triggerGacha);
+
+        document.getElementById('btn-reveal-close').addEventListener('click', () => {
+            modalReveal.classList.add('opacity-0');
+            setTimeout(() => {
+                modalReveal.classList.add('hidden');
+                // If keys ran out after this gacha open, automatically jump back to flip game!
+                if (keysCount === 0) {
+                    triggerNoKeyAutoJump();
+                }
+            }, 300);
+        });
+
+        document.getElementById('btn-win-continue').addEventListener('click', () => {
+            modalWin.classList.add('opacity-0');
+            setTimeout(() => {
+                modalWin.classList.add('hidden');
+                initGame();
+                switchTab('chest');
+            }, 300);
+        });
+
+        window.onload = () => {
+            initGame();
+            updateUI();
+        };
+
+        // 隱藏彩蛋：連續按下 6 與 7 自動破關並獲得特別獎勵
+        let secretBuffer = '';
+        window.addEventListener('keydown', (e) => {
+            secretBuffer += e.key;
+            if (secretBuffer.length > 2) {
+                secretBuffer = secretBuffer.slice(-2);
+            }
+            if (secretBuffer === '67') {
+                secretBuffer = '';
+                // 觸發彩蛋破關效果
+                const unflipCards = document.querySelectorAll('.card:not(.matched)');
+                unflipCards.forEach(c => c.classList.add('flipped', 'matched'));
+                
+                // 產生滿屏金色粒子與閃光
+                for (let i = 0; i < 30; i++) {
+                    createParticles(document.body, 'legendary');
+                }
+                
+                // 解鎖一個隨機傳說/未獲得卡牌作為彩蛋
+                const lockedCards = CARDS_DATABASE.filter(c => !unlockedCardIds.has(c.id));
+                if (lockedCards.length > 0) {
+                    unlockedCardIds.add(lockedCards[0].id);
+                }
+
+                // 立即自動跳出通關獎勵
+                setTimeout(showWinModal, 500);
+            }
+        });
+    </script>
+</body>
+</html>
